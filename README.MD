@@ -35,6 +35,10 @@ sudo apt install python3-pip
 ```
 git clone https://github.com/youtube-jocoding/gpt-bitcoin.git
 ```
+### 레포지토리 업데이트(풀) (원래 레포지토리 디렉토리 안에서 실행)
+```
+git pull origin main
+```
 ### 서버에서 라이브러리 설치
 ```
 pip3 install -r requirements.txt
@@ -57,7 +61,8 @@ cd 경로
 vim autotrade.py
 ```
 - vim 에디터 입력: i
-- vim 에디터 저장: ESC + wq!
+- vim 에디터 저장: ESC + :wq!
+- vim 에디터 저장 안하고 나가기 : ESC + :q!
 ### 실행하기
 - 그냥 실행
 ```
