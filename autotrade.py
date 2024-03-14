@@ -8,6 +8,7 @@ import json
 from openai import OpenAI
 import schedule
 import time
+from datetime import datetime
 
 # Setup
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -140,7 +141,8 @@ def make_decision_and_execute():
 
     try:
         decision = json.loads(advice)
-        print(decision)
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # 현재 시간을 문자열로 포맷
+        print(f"[{current_time}] 결정: {decision}\n")  # 현재 시간과 결정을 함께 출력
         if decision.get('decision') == "buy":
             execute_buy()
         elif decision.get('decision') == "sell":
@@ -150,7 +152,11 @@ def make_decision_and_execute():
 
 if __name__ == "__main__":
     make_decision_and_execute()
-    schedule.every().hour.at(":01").do(make_decision_and_execute)
+    # schedule.every().hour.at(":01").do(make_decision_and_execute)
+    schedule.every().day.at("00:01").do(make_decision_and_execute)
+    schedule.every().day.at("06:01").do(make_decision_and_execute)
+    schedule.every().day.at("12:01").do(make_decision_and_execute)
+    schedule.every().day.at("18:01").do(make_decision_and_execute)
 
     while True:
         schedule.run_pending()
