@@ -1,4 +1,6 @@
 python-dotenv
+requests
+deepl
 openai
 pyupbit
 pyjwt

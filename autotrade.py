@@ -1,4 +1,5 @@
 import os
+import deepl
 from dotenv import load_dotenv
 load_dotenv()
 import pyupbit
@@ -141,14 +142,26 @@ def make_decision_and_execute():
 
     try:
         decision = json.loads(advice)
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # 현재 시간을 문자열로 포맷
-        print(f"[{current_time}] 결정: {decision}\n")  # 현재 시간과 결정을 함께 출력
+        decision_text = decision.get('decision')
+        reason_text = decision.get('reason')
+        
+        translated_reason = translate_to_korean(reason_text)
+        
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{current_time}] 결정: {decision_text}, 이유: {translated_reason}")
+
         if decision.get('decision') == "buy":
             execute_buy()
         elif decision.get('decision') == "sell":
             execute_sell()
     except Exception as e:
         print(f"Failed to parse the advice as JSON: {e}")
+
+def translate_to_korean(text):
+    api_key = os.getenv("DEEPL_API_KEY")
+    translator = deepl.Translator(api_key)
+    result = translator.translate_text(text, target_lang="KO")
+    return result.text
 
 if __name__ == "__main__":
     make_decision_and_execute()
