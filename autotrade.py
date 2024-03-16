@@ -119,11 +119,7 @@ def analyze_data_with_gpt4(data_json):
             ],
             response_format={"type":"json_object"}
         )
-        if response.status_code == 200:
-            return response.choices[0].message.content
-        else:
-            print("OpenAI API 호출에 실패했습니다. HTTP 상태 코드: ", response.status_code)
-            return None
+        return response.choices[0].message.content
     except Exception as e:
         print(f"gpt 분석 중 예상치 못한 오류가 발생했습니다: {e}")
         return None
