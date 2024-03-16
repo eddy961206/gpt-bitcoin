@@ -7,13 +7,24 @@ import pandas as pd
 import pandas_ta as ta
 import json
 from openai import OpenAI
+import openai
 import schedule
 import time
+import requests
 from datetime import datetime
 
 # Setup
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 upbit = pyupbit.Upbit(os.getenv("UPBIT_ACCESS_KEY"), os.getenv("UPBIT_SECRET_KEY"))
+slackToken = os.getenv("SLACK_TOKEN")
+SLACK_CHANNEL="#bitcoin-gpt"
+
+
+def post_message(token, channel, text):
+    response = requests.post("https://slack.com/api/chat.postMessage",
+        headers={"Authorization": "Bearer "+token},
+        data={"channel": channel,"text": text}
+    )
 
 def get_current_status():
     orderbook = pyupbit.get_orderbook(ticker="KRW-BTC")
@@ -96,7 +107,7 @@ def analyze_data_with_gpt4(data_json):
     try:
         instructions = get_instructions(instructions_path)
         if not instructions:
-            print("No instructions found.")
+            print(f"{instructions_path}을 찾을 수 없습니다.")
             return None
 
         current_status = get_current_status()
@@ -109,10 +120,18 @@ def analyze_data_with_gpt4(data_json):
             ],
             response_format={"type":"json_object"}
         )
-        return response.choices[0].message.content
-    except Exception as e:
-        print(f"Error in analyzing data with GPT-4: {e}")
+        if response.status_code == 200:
+            return response.choices[0].message.content
+        else:
+            print("OpenAI API 호출에 실패했습니다. HTTP 상태 코드: ", response.status_code)
+            return None
+    except openai.error.OpenAIError as e:
+        print(f"GPT-4 데이터 분석 중 오류가 발생했습니다: {e}")
         return None
+    except Exception as e:
+        print(f"예상치 못한 오류가 발생했습니다: {e}")
+        return None
+
 
 def execute_buy():
     print("Attempting to buy BTC...")
@@ -123,6 +142,7 @@ def execute_buy():
             print("Buy order successful:", result)
     except Exception as e:
         print(f"Failed to execute buy order: {e}")
+        post_message(slackToken, SLACK_CHANNEL, str(e))
 
 def execute_sell():
     print("Attempting to sell BTC...")
@@ -134,6 +154,7 @@ def execute_sell():
             print("Sell order successful:", result)
     except Exception as e:
         print(f"Failed to execute sell order: {e}")
+        post_message(slackToken, SLACK_CHANNEL, str(e))
 
 def make_decision_and_execute():
     print("Making decision and executing...")
@@ -148,7 +169,10 @@ def make_decision_and_execute():
         translated_reason = translate_to_korean(reason_text)
         
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{current_time}] 결정: {decision_text}, 이유: {translated_reason}")
+        message_content = f"[{current_time}]\n결정: {decision_text}s\n이유: {translated_reason}"
+
+        print(message_content)
+        post_message(slackToken, SLACK_CHANNEL, message_content)
 
         if decision.get('decision') == "buy":
             execute_buy()
@@ -158,10 +182,24 @@ def make_decision_and_execute():
         print(f"Failed to parse the advice as JSON: {e}")
 
 def translate_to_korean(text):
-    api_key = os.getenv("DEEPL_API_KEY")
-    translator = deepl.Translator(api_key)
-    result = translator.translate_text(text, target_lang="KO")
-    return result.text
+    try:
+        api_key = os.getenv("DEEPL_API_KEY")
+        if not api_key:
+            raise ValueError("DeepL API 키가 설정되지 않았습니다.")
+        
+        translator = deepl.Translator(api_key)
+        translated_text = translator.translate_text(text, target_lang="KO").text
+        return translated_text
+    except ValueError as e:
+        print(f"DeepL 환경 변수가 설정되지 않았을 수 있습니다: {e}")
+        return translated_text  # API 키 문제 등으로 번역에 실패한 경우 원문 반환
+    except deepl.DeepLException as e:
+        print(f"DeepL API 호출 중 오류 발생: {e}")
+        return translated_text  # DeepL 관련 오류가 발생한 경우 원문 반환
+    except Exception as e:
+        print(f"번역 중 예기치 않은 오류 발생: {e}")
+        return translated_text  # 기타 예외 처리
+
 
 if __name__ == "__main__":
     make_decision_and_execute()
