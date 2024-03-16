@@ -7,7 +7,6 @@ import pandas as pd
 import pandas_ta as ta
 import json
 from openai import OpenAI
-import openai
 import schedule
 import time
 import requests
@@ -125,11 +124,8 @@ def analyze_data_with_gpt4(data_json):
         else:
             print("OpenAI API 호출에 실패했습니다. HTTP 상태 코드: ", response.status_code)
             return None
-    except openai.error.OpenAIError as e:
-        print(f"GPT-4 데이터 분석 중 오류가 발생했습니다: {e}")
-        return None
     except Exception as e:
-        print(f"예상치 못한 오류가 발생했습니다: {e}")
+        print(f"gpt 분석 중 예상치 못한 오류가 발생했습니다: {e}")
         return None
 
 
