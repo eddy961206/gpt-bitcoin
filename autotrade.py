@@ -40,10 +40,10 @@ def get_current_status():
 
     for b in balances:
         if b['currency'] == "BTC":
-            btc_balance = b['balance']
-            btc_avg_buy_price = b['avg_buy_price']
+            btc_balance = float(b['balance'])
+            btc_avg_buy_price = float(b['avg_buy_price'])
         if b['currency'] == "KRW":
-            krw_balance = b['balance']
+            krw_balance = float(b['balance'])
 
     # gpt 결정 전 상태 저장 (맨 처음에만)
     if(pre_trade_status == {}):
