@@ -244,6 +244,7 @@ def format_value_change(pre_value, post_value, format_str="{:,.0f}", suffix=""):
         return f"{format_str.format(pre_value)}{suffix} -> {format_str.format(post_value)}{suffix} ({abs(percentage_change):.2f}%)"
 
 def compare_trade_status():
+    global pre_trade_status
     global post_trade_status
 
     # 잔고 정보를 가져옵니다.
