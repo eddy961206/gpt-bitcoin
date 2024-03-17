@@ -213,23 +213,7 @@ def make_decision_and_execute():
         print_and_slack_message(f"Failed to parse the advice as JSON: {e}")
 
 
-if __name__ == "__main__":
-    make_decision_and_execute()
-    # schedule.every().hour.at(":01").do(make_decision_and_execute)
-    schedule.every().day.at("00:01").do(make_decision_and_execute)
-    schedule.every().day.at("04:01").do(make_decision_and_execute)
-    schedule.every().day.at("08:01").do(make_decision_and_execute)
-    schedule.every().day.at("12:01").do(make_decision_and_execute)
-    schedule.every().day.at("16:01").do(make_decision_and_execute)
-    schedule.every().day.at("20:01").do(make_decision_and_execute)
-
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
-
 ############# 기타 함수들 ############# 
-
 
 def translate_to_korean(text):
     try:
@@ -297,6 +281,24 @@ def compare_trade_status():
     pre_trade_status = post_trade_status.copy()  # 현재 상태를 과거 상태로 덮어씌우기
 
     print_and_slack_message(message)
+
+
+############ 메인 함수 ############
+if __name__ == "__main__":
+    make_decision_and_execute()
+    # schedule.every().hour.at(":01").do(make_decision_and_execute)
+    schedule.every().day.at("00:01").do(make_decision_and_execute)
+    schedule.every().day.at("04:01").do(make_decision_and_execute)
+    schedule.every().day.at("08:01").do(make_decision_and_execute)
+    schedule.every().day.at("12:01").do(make_decision_and_execute)
+    schedule.every().day.at("16:01").do(make_decision_and_execute)
+    schedule.every().day.at("20:01").do(make_decision_and_execute)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+
 
 
 
