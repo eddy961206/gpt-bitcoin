@@ -75,6 +75,8 @@ nohup python3 -u autotrade.py > output.log 2>&1 &
 - 로그 보기
 ```
 cat output.log
+```
+```
 tail -f output.log
 ```
 - 실행 확인
