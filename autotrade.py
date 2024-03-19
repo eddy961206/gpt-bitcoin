@@ -18,6 +18,10 @@ UPBIT_ACCESS_KEY = os.getenv("UPBIT_ACCESS_KEY")
 UPBIT_SECRET_KEY = os.getenv("UPBIT_SECRET_KEY")
 GPT_MODEL = os.getenv("GPT_MODEL")
 
+HOUR_INTERVAL = 4        # 작동 주기 
+MIN_TRADE_AMOUNT = 5000  # 업비트 최소 거래가능 금액(원)
+FEE_RATE = 0.0005        # 업비트 수수료 0.05%
+
 # Setup
 client = OpenAI(api_key=OPENAI_API_KEY)
 upbit = pyupbit.Upbit(UPBIT_ACCESS_KEY, UPBIT_SECRET_KEY)
@@ -52,6 +56,7 @@ def get_current_status():
             "btc_balance": btc_balance,
             "avg_buy_price": btc_avg_buy_price,
             "btc_valuation": btc_balance * current_btc_price,
+            "total_assets": krw_balance + (btc_balance * btc_avg_buy_price),
         }
 
     current_status = {
@@ -153,25 +158,26 @@ def analyze_data_with_gpt4(data_json):
         print(traceback.format_exc())
         return None
 
-
-def execute_buy():
+def execute_buy(percentage=1.00):  # 보유 원화 기준
     print("Attempting to buy BTC...")
     try:
         krw = upbit.get_balance("KRW")
-        if krw > 5000:
-            result = upbit.buy_market_order("KRW-BTC", krw*0.9995)
+        amount_to_buy = round(krw * percentage, 2)
+        if amount_to_buy > MIN_TRADE_AMOUNT:
+            result = upbit.buy_market_order("KRW-BTC", (1 - FEE_RATE))
             print(f"**Buy order successful**\n```{result}```")
+        else: 
+            print_and_slack_message(f"**:warning: `원화가 부족해 매수할 수 없습니다. 현재 원화 잔고: {krw} KRW. 최소 {MIN_TRADE_AMOUNT}.**\n```{result}```")
     except Exception as e:
         print_and_slack_message(f"**:bug: `Failed to execute buy order**`\n```{e}```")
 
-
-def execute_sell():
+def execute_sell(percentage=1.00):   # 보유 BTC 기준
     print("Attempting to sell BTC...")
     try:
         btc = upbit.get_balance("BTC")
-        current_price = pyupbit.get_orderbook(ticker="KRW-BTC")['orderbook_units'][0]["ask_price"]
-        if current_price*btc > 5000:
-            result = upbit.sell_market_order("KRW-BTC", btc)
+        amount_to_sell = round(btc * percentage, 2)
+        if amount_to_sell * pyupbit.get_current_price("KRW-BTC") > MIN_TRADE_AMOUNT:  
+            result = upbit.sell_market_order("KRW-BTC", amount_to_sell)
             print(f"**Sell order successful**\n```{result}```")
     except Exception as e:
         print(f"Failed to execute sell order: {e}")
@@ -184,33 +190,44 @@ def make_decision_and_execute():
     advice = analyze_data_with_gpt4(data_json)
 
     try:
-        decision = json.loads(advice)
-        decision_text = decision.get('decision')
-        reason_text = decision.get('reason')
-        translated_reason = translate_to_korean(reason_text)
+        decisions = json.loads(advice)
+        decision   = decisions.get('decision')
+        reason     = decisions.get('reason')
+        percentage = float(decisions.get('percentage'))
+
+        translated_reason = translate_to_korean(reason)
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        message_text = ""
-        if decision_text == "buy":
-            execute_buy()
-            message_text = "* 코인을 매수합니다 :moneybag:"
-        elif decision_text == "sell":
-            execute_sell()
-            message_text = "* 코인을 매도합니다 :money_with_wings:"
-        elif decision_text == "hold":
-            message_text = "* 코인을 보유합니다 :eyes:"
+        suff_message = ""
+        if decision == "buy":
+            execute_buy(percentage)
+            suff_message = f"- :moneybag: {percentage * 100}% 매수! :moneybag:"
+
+        elif decision == "sell":
+            execute_sell(percentage)
+            suff_message = f"- :money_with_wings: {percentage * 100}% 매도! :money_with_wings:"
+
+        elif decision == "hold":
+            suff_message = "- :eyes: 보유합니다 :eyes:"
+
         else:
-            message_text = "* 결정을 내릴 수 없습니다 :thinking_face:"
+            suff_message = "- :thinking_face: 결정을 내릴 수 없습니다 :thinking_face:"
 
 
-        detailed_message = f"[{current_time}]\n{message_text}\n- 이유:\n{translated_reason}"
+        detailed_message = f"[{current_time}]\n{suff_message}\n- 이유:\n{translated_reason}"
         print_and_slack_message(detailed_message)
 
-        # gpt 결정 후 상태 비교 및 메시지 생성 호출
+        # gpt 결정 후 상태 비교 및 메시지 전송
         compare_trade_status()
 
     except Exception as e:
         print_and_slack_message(f"Failed to parse the advice as JSON: {e}")
+
+
+def schedule_tasks(hour_interval):
+    for hour in range(0, 24, hour_interval):
+        schedule_time = "{:02d}:01".format(hour)    # 01 분마다
+        schedule.every().day.at(schedule_time).do(make_decision_and_execute)
 
 
 ############# 기타 함수들 ############# 
@@ -258,12 +275,19 @@ def compare_trade_status():
         "krw_balance": krw_balance,
         "btc_balance": btc_balance,
         "avg_buy_price": btc_avg_buy_price,
-        "btc_valuation": upbit.get_balance("BTC") * current_btc_price,
+        "btc_valuation": btc_balance * current_btc_price,
     }
     
     # 비트코인 평가금액 및 총 보유 자산 계산
     btc_valuation = btc_balance * current_btc_price # 비트코인 평가금액
     total_assets = krw_balance + btc_valuation  # 총 보유 자산
+
+    # 거래 전 총 보유 자산 계산 (비트코인 평가금액 포함)
+    pre_total_assets = pre_trade_status["krw_balance"] +\
+          (pre_trade_status["btc_balance"] * pre_trade_status.get("btc_valuation", 0) / pre_trade_status["btc_balance"] if pre_trade_status["btc_balance"] else 0)
+
+    post_trade_status["total_assets"] = total_assets  # 거래 후 총 자산 상태 업데이트
+
 
     # 평가손익 및 수익률 계산
     valuation_profit_loss = btc_valuation - (btc_avg_buy_price * btc_balance)   # 평가손익
@@ -277,7 +301,7 @@ def compare_trade_status():
     message += "\n코인 매수 평균가 : " + format_value_change(pre_trade_status["avg_buy_price"], post_trade_status["avg_buy_price"], "{:,.0f}", " KRW")
     message += "\n코인 평가금액 : " + format_value_change(pre_trade_status["btc_valuation"], post_trade_status["btc_valuation"], "{:,.0f}", " KRW")
     message += f"\n\n평가손익 : {valuation_profit_loss:,.0f} KRW\n수익률 : {return_rate:.2f}%\n\n"
-    message += f"총 보유 자산 : {total_assets:,.0f} KRW\n```"
+    message += "총 보유 자산 : " + format_value_change(pre_total_assets, post_trade_status["total_assets"], "{:,.0f}", " KRW") + "\n```"
 
     pre_trade_status = post_trade_status.copy()  # 현재 상태를 과거 상태로 덮어씌우기
 
@@ -286,14 +310,7 @@ def compare_trade_status():
 
 ############ 메인 함수 ############
 if __name__ == "__main__":
-    make_decision_and_execute()
-    # schedule.every().hour.at(":01").do(make_decision_and_execute)
-    schedule.every().day.at("00:01").do(make_decision_and_execute)
-    schedule.every().day.at("04:01").do(make_decision_and_execute)
-    schedule.every().day.at("08:01").do(make_decision_and_execute)
-    schedule.every().day.at("12:01").do(make_decision_and_execute)
-    schedule.every().day.at("16:01").do(make_decision_and_execute)
-    schedule.every().day.at("20:01").do(make_decision_and_execute)
+    schedule_tasks(HOUR_INTERVAL)
 
     while True:
         schedule.run_pending()
