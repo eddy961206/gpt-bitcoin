@@ -164,7 +164,7 @@ def execute_buy(percentage=1.00):  # 보유 원화 기준
         krw = upbit.get_balance("KRW")
         amount_to_buy = round(krw * percentage, 2)
         if amount_to_buy > MIN_TRADE_AMOUNT:
-            result = upbit.buy_market_order("KRW-BTC", (1 - FEE_RATE))
+            result = upbit.buy_market_order("KRW-BTC", amount_to_buy * (1 - FEE_RATE))
             print(f"**Buy order successful**\n```{result}```")
         else: 
             print_and_slack_message(f"**:warning: `원화가 부족해 매수할 수 없습니다. 현재 원화 잔고: {krw} KRW. 최소 {MIN_TRADE_AMOUNT}.**\n```{result}```")
