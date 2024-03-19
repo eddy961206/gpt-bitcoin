@@ -310,6 +310,7 @@ def compare_trade_status():
 
 ############ 메인 함수 ############
 if __name__ == "__main__":
+    make_decision_and_execute()
     schedule_tasks(HOUR_INTERVAL)
 
     while True:
