@@ -201,11 +201,11 @@ def make_decision_and_execute():
         suff_message = ""
         if decision == "buy":
             execute_buy(percentage)
-            suff_message = f"- :moneybag: {percentage * 100}% 매수! :moneybag:"
+            suff_message = f"- :moneybag: {int(percentage * 100)}% 매수! :moneybag:"
 
         elif decision == "sell":
             execute_sell(percentage)
-            suff_message = f"- :money_with_wings: {percentage * 100}% 매도! :money_with_wings:"
+            suff_message = f"- :money_with_wings: {int(percentage * 100)}% 매도! :money_with_wings:"
 
         elif decision == "hold":
             suff_message = "- :eyes: 보유합니다 :eyes:"
