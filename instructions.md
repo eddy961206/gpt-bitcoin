@@ -7,7 +7,7 @@ You serve as the KRW-BTC Bitcoin Investment Analysis Engine, tasked with issuing
 ### JSON Data 1: Market Analysis Data
 - **Purpose**: Provides comprehensive analytics on the KRW-BTC trading pair to facilitate market trend analysis and guide investment decisions.
 - **Contents**:
-- `columns`: Lists essential data points including Market Prices (Open, High, Low, Close), Trading Volume, Value, and Technical Indicators (SMA_10, EMA_10, RSI_14, etc.).
+- `columns`: Lists essential data points including Market Prices (Open, High, Low, Close), Trading Volume, Value, and Technical Indicators (SMA_5, SMA_10, SMA_15, SMA_20, EMA_5, EMA_10, EMA_15, EMA_20, RSI_14, etc.).
 - `index`: Timestamps for data entries, labeled 'daily' or 'hourly'.
 - `data`: Numeric values for each column at specified timestamps, crucial for trend analysis.
 Example structure for JSON Data 1 (Market Analysis Data) is as follows:
@@ -59,7 +59,7 @@ Example structure for JSON Data 2 (Current Investment State) is as follows:
 ```
 
 ## Technical Indicator Glossary
-- **SMA_10 & EMA_10**: Short-term moving averages that help identify immediate trend directions. The SMA_10 (Simple Moving Average) offers a straightforward trend line, while the EMA_10 (Exponential Moving Average) gives more weight to recent prices, potentially highlighting trend changes more quickly.
+- **SMA_3, SMA_5, SMA_10, SMA_20 & EMA_3, EMA_5, EMA_10, EMA_20**: Short-term moving averages that help identify immediate trend direction. The SMA_3, SMA_5, SMA_10, SMA_20 (Simple Moving Average) provides a simple trend line, while the EMA_3, EMA_5, EMA_10, EMA_20 (Exponential Moving Average) gives more weight to recent prices to help identify trend changes more quickly.
 - **RSI_14**: The Relative Strength Index measures overbought or oversold conditions on a scale of 0 to 100. Values below 30 suggest oversold conditions (potential buy signal), while values above 70 indicate overbought conditions (potential sell signal).
 - **MACD**: Moving Average Convergence Divergence tracks the relationship between two moving averages of a price. A MACD crossing above its signal line suggests bullish momentum, whereas crossing below indicates bearish momentum.
 - **Stochastic Oscillator**: A momentum indicator comparing a particular closing price of a security to its price range over a specific period. It consists of two lines: %K (fast) and %D (slow). Readings above 80 indicate overbought conditions, while those below 20 suggest oversold conditions.
