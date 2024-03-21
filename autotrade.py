@@ -80,8 +80,17 @@ def fetch_and_prepare_data():
     # Define a helper function to add indicators
     def add_indicators(df):
         # Moving Averages
+        # Calculate and add SMAs for 3, 5, 10, and 20-day periods
+        df['SMA_3'] = ta.sma(df['close'], length=3)
+        df['SMA_5'] = ta.sma(df['close'], length=5)
         df['SMA_10'] = ta.sma(df['close'], length=10)
+        df['SMA_20'] = ta.sma(df['close'], length=20)
+
+        # Calculate and add EMAs for 3, 5, 10, and 20-day periods
+        df['EMA_3'] = ta.ema(df['close'], length=3)
+        df['EMA_5'] = ta.ema(df['close'], length=5)
         df['EMA_10'] = ta.ema(df['close'], length=10)
+        df['EMA_20'] = ta.ema(df['close'], length=20)
 
         # RSI
         df['RSI_14'] = ta.rsi(df['close'], length=14)
@@ -260,13 +269,13 @@ def translate_to_korean(text):
         return translated_text  # 기타 예외 처리
     
 
-def format_value_change(pre_value, post_value, format_str="{:,.0f}", suffix=""):
+def format_value_change(pre_value, post_value, format_str="{:,.0f}", suffix=""):   # 천 단위 구분자(,), 소수점 X
     if pre_value == post_value:
         return f"{format_str.format(pre_value)}{suffix} -> 변동 없음"
     else:
         change = post_value - pre_value
         percentage_change = (change / pre_value) * 100 if pre_value else 0
-        return f"{format_str.format(pre_value)}{suffix} -> {format_str.format(post_value)}{suffix} ({abs(percentage_change):.2f}%)"
+        return f"{format_str.format(pre_value)}{suffix} -> {format_str.format(post_value)}{suffix} ({percentage_change:.2f}%)"  # 소수점 아래 두 자리
 
 def compare_trade_status():
     global pre_trade_status
@@ -278,23 +287,19 @@ def compare_trade_status():
     btc_avg_buy_price = upbit.get_avg_buy_price("BTC")
     current_btc_price = pyupbit.get_current_price("KRW-BTC")
 
+    # 비트코인 평가금액
+    btc_valuation = btc_balance * current_btc_price # 비트코인 평가금액
+
     # 거래 후 상태 업데이트
     post_trade_status = {
         "krw_balance": krw_balance,
         "btc_balance": btc_balance,
         "avg_buy_price": btc_avg_buy_price,
-        "btc_valuation": btc_balance * current_btc_price,
+        "btc_valuation": btc_valuation,
     }
     
-    # 비트코인 평가금액 및 총 보유 자산 계산
-    btc_valuation = btc_balance * current_btc_price # 비트코인 평가금액
-    total_assets = krw_balance + btc_valuation  # 총 보유 자산
-
-    # 거래 전 총 보유 자산 계산 (비트코인 평가금액 포함)
-    pre_total_assets = pre_trade_status["krw_balance"] +\
-          (pre_trade_status["btc_balance"] * pre_trade_status.get("btc_valuation", 0) / pre_trade_status["btc_balance"] if pre_trade_status["btc_balance"] else 0)
-
-    post_trade_status["total_assets"] = total_assets  # 거래 후 총 자산 상태 업데이트
+    # 거래 후 총 자산 상태 업데이트
+    post_trade_status["total_assets"] = krw_balance + btc_valuation  # 총 보유 자산
 
 
     # 평가손익 및 수익률 계산
@@ -304,12 +309,12 @@ def compare_trade_status():
     else:
         return_rate = 0
 
-    message = "```\n원화 보유 자산 : " + format_value_change(pre_trade_status["krw_balance"], post_trade_status["krw_balance"], "{:,.0f}", " KRW")
-    message += "\n코인 보유 자산 : " + format_value_change(pre_trade_status["btc_balance"], post_trade_status["btc_balance"], "{:.5f}", " BTC")
+    message = "```\n원화 보유 자산 : " + format_value_change(pre_trade_status["krw_balance"], post_trade_status["krw_balance"], "{:,.0f}", " KRW") # 천 단위 구분자(,), 소수점 X
+    message += "\n코인 보유 자산 : " + format_value_change(pre_trade_status["btc_balance"], post_trade_status["btc_balance"], "{:.5f}", " BTC") # 소수점 5자리까지
     message += "\n코인 매수 평균가 : " + format_value_change(pre_trade_status["avg_buy_price"], post_trade_status["avg_buy_price"], "{:,.0f}", " KRW")
     message += "\n코인 평가금액 : " + format_value_change(pre_trade_status["btc_valuation"], post_trade_status["btc_valuation"], "{:,.0f}", " KRW")
     message += f"\n\n평가손익 : {valuation_profit_loss:,.0f} KRW\n수익률 : {return_rate:.2f}%\n\n"
-    message += "총 보유 자산 : " + format_value_change(pre_total_assets, post_trade_status["total_assets"], "{:,.0f}", " KRW") + "\n```"
+    message += "총 보유 자산 : " + format_value_change(pre_trade_status["total_assets"], post_trade_status["total_assets"], "{:,.0f}", " KRW") + "\n```"
 
     pre_trade_status = post_trade_status.copy()  # 현재 상태를 과거 상태로 덮어씌우기
 
@@ -318,7 +323,7 @@ def compare_trade_status():
 
 ############ 메인 함수 ############
 if __name__ == "__main__":
-    make_decision_and_execute()
+    # make_decision_and_execute()
     schedule_tasks(HOUR_INTERVAL)
 
     while True:
