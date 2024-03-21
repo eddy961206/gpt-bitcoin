@@ -171,7 +171,7 @@ def execute_buy(percentage=1.00):  # 보유 원화 기준
     print(f"보유 원화의 {percentage * 100}% 만큼 매수를 시도합니다...")
     try:
         krw = upbit.get_balance("KRW")
-        amount_to_buy = round(krw * percentage, 2)
+        amount_to_buy = krw * percentage
         if amount_to_buy > MIN_TRADE_AMOUNT:
             result = upbit.buy_market_order("KRW-BTC", amount_to_buy * (1 - FEE_RATE))
             if result is None or 'error' in result:  # 매수 주문 실패를 확인
@@ -183,11 +183,14 @@ def execute_buy(percentage=1.00):  # 보유 원화 기준
         print_and_slack_message(f"**:bug: 매수 주문 실패**\n```{e}```")
 
 def execute_sell(percentage=1.00):   # 보유 BTC 기준
+    print('percentage', percentage)
     print(f"보유 BTC의 {percentage * 100}% 만큼 매도를 시도합니다...")
     try:
         btc = upbit.get_balance("BTC")
         current_price = pyupbit.get_current_price("KRW-BTC")
-        amount_to_sell = round(btc * percentage, 2)
+        
+        # 보유량과 계산된 매도량 중 더 작은 값을 매도량으로 설정
+        amount_to_sell = min(btc, btc * percentage)
 
         if amount_to_sell * current_price > MIN_TRADE_AMOUNT:
             result = upbit.sell_market_order("KRW-BTC", amount_to_sell)
