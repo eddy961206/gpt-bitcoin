@@ -159,29 +159,36 @@ def analyze_data_with_gpt4(data_json):
         return None
 
 def execute_buy(percentage=1.00):  # 보유 원화 기준
-    print("Attempting to buy BTC...")
+    print(f"보유 원화의 {percentage * 100}% 만큼 매수를 시도합니다...")
     try:
         krw = upbit.get_balance("KRW")
         amount_to_buy = round(krw * percentage, 2)
         if amount_to_buy > MIN_TRADE_AMOUNT:
             result = upbit.buy_market_order("KRW-BTC", amount_to_buy * (1 - FEE_RATE))
+            if result is None or 'error' in result:  # 매수 주문 실패를 확인
+                raise Exception(f"매수 주문 실패: 반환 결과 없음 또는 오류 발생\n{result}")
             print(f"**Buy order successful**\n```{result}```")
         else: 
-            print_and_slack_message(f"**:warning: `원화가 부족해 매수할 수 없습니다. 현재 원화 잔고: {krw} KRW. 최소 {MIN_TRADE_AMOUNT}.**\n```{result}```")
+            raise Exception(f"매수 최소 금액 미달: 필요 : {MIN_TRADE_AMOUNT}, 매수 금액 : {amount_to_buy}")
     except Exception as e:
-        print_and_slack_message(f"**:bug: `Failed to execute buy order**`\n```{e}```")
+        print_and_slack_message(f"**:bug: 매수 주문 실패**\n```{e}```")
 
 def execute_sell(percentage=1.00):   # 보유 BTC 기준
-    print("Attempting to sell BTC...")
+    print(f"보유 BTC의 {percentage * 100}% 만큼 매도를 시도합니다...")
     try:
         btc = upbit.get_balance("BTC")
+        current_price = pyupbit.get_current_price("KRW-BTC")
         amount_to_sell = round(btc * percentage, 2)
-        if amount_to_sell * pyupbit.get_current_price("KRW-BTC") > MIN_TRADE_AMOUNT:  
+
+        if amount_to_sell * current_price > MIN_TRADE_AMOUNT:
             result = upbit.sell_market_order("KRW-BTC", amount_to_sell)
+            if result is None:
+                raise Exception("매도 주문 실패: 반환 결과 없음")
             print(f"**Sell order successful**\n```{result}```")
+        else:
+            raise Exception(f"매도 최소 금액 미달: 필요 : {MIN_TRADE_AMOUNT}, 현재 : {amount_to_sell * current_price}")
     except Exception as e:
-        print(f"Failed to execute sell order: {e}")
-        print_and_slack_message(f"**:bug: Failed to execute sell order**\n```{e}```")
+        print_and_slack_message(f"**:bug: 매도 주문 실패**\n```{e}```")
 
 
 def make_decision_and_execute():
@@ -229,8 +236,9 @@ def schedule_tasks(hour_interval):
         schedule_time = "{:02d}:01".format(hour)    # 01 분마다
         schedule.every().day.at(schedule_time).do(make_decision_and_execute)
 
-
+#########################################################################################################
 ############# 기타 함수들 ############# 
+#########################################################################################################
 
 def translate_to_korean(text):
     try:

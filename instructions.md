@@ -94,8 +94,8 @@ Example structure for JSON Data 2 (Current Investment State) is as follows:
 ``` json
 {
     "decision": "<buy|sell|hold>",
-    "percentage": "<0.00~1.00>",
-    "reason": "<Rationale behind the investment decision>"
+    "percentage": "<for buy decision: percentage of available KRW balance to use for purchasing BTC, for sell decision: percentage of held BTC to sell, 0.00~1.00>",
+    "reason": "<Rationale behind the investment decision and the chosen percentage>"
 }
 ```
 
