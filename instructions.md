@@ -13,8 +13,8 @@ You serve as the KRW-BTC Bitcoin Investment Analysis Engine, tasked with issuing
 Example structure for JSON Data 1 (Market Analysis Data) is as follows:
 ```json
 {
-    "columns": ["open", "high", "low", "close", "volume", "..."],
-    "index": [["hourly", "<timestamp>"], "..."],
+    "columns": ["open","high","low","close","volume","value","SMA_3","SMA_5","SMA_10","SMA_20","EMA_3","EMA_5","EMA_10","EMA_20","RSI_14","STOCHk_14_3_3","STOCHd_14_3_3","MACD","Signal_Line","MACD_Histogram","Middle_Band","Upper_Band","Lower_Band"],
+    "index": [["daily", "<timestamp>"], "...", ["hourly", "<timestamp>"], "..."],
     "data": [[<open_price>, <high_price>, <low_price>, <close_price>, <volume>, "..."], "..."]
 }
 ```
