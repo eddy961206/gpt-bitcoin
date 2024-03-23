@@ -1,12 +1,6 @@
-import random
-import sys
 import os
-from pathlib import Path
-
-# 루트 디렉토리의 경로를 sys.path에 추가
-root_directory = Path(__file__).parent.parent
-sys.path.append(str(root_directory))
-
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
 import deepl
 from dotenv import load_dotenv
@@ -27,6 +21,10 @@ UPBIT_ACCESS_KEY = os.getenv("UPBIT_ACCESS_KEY")
 UPBIT_SECRET_KEY = os.getenv("UPBIT_SECRET_KEY")
 GPT_MODEL = os.getenv("GPT_MODEL")
 
+HOUR_INTERVAL = 4        # 작동 주기 
+MIN_TRADE_AMOUNT = 5000  # 업비트 최소 거래가능 금액(원)
+FEE_RATE = 0.0005        # 업비트 수수료 0.05%
+
 # Setup
 client = OpenAI(api_key=OPENAI_API_KEY)
 upbit = pyupbit.Upbit(UPBIT_ACCESS_KEY, UPBIT_SECRET_KEY)
@@ -36,143 +34,33 @@ pre_trade_status = {}
 post_trade_status = {}
 
 
-# 한화로 환산한 총 보유 자산 (KRW, BTC 포함)
-def calculate_total_assets(json_data):
-    total_assets = 0
-    for entry in json_data:
-        if entry["currency"] == "KRW":
-            total_assets += float(entry["balance"])
-        if entry["currency"] == "BTC":
-            total_assets += float(entry["balance"]) * pyupbit.get_current_price(
-                "KRW-BTC"
-            )
-    return total_assets
-
-
-def format_json_to_slack(json_data):
-    formatted_message = "```"
-    for entry in json_data:
-        formatted_message += f"\nCurrency: {entry['currency']}\nBalance: {entry['balance']}\nLocked: {entry['locked']}\nAvg Buy Price: {entry['avg_buy_price']}\nAvg Buy Price Modified: {entry['avg_buy_price_modified']}\nUnit Currency: {entry['unit_currency']}\n"
-
-    formatted_message += "\n총 보유자산: "
-    formatted_message += "{:,.2f}".format(calculate_total_assets(json_data))
-    formatted_message += "KRW\n```"
-    return formatted_message
-
-# def report_balance():
-#     try:
-#         balances_json_data = upbit.get_balances()
-        
-#         formatted_balances_message = format_json_to_slack(balances_json_data)
-        
-#         print_and_slack_message(formatted_balances_message)
-#     except Exception as e:
-#         print_and_slack_message(f"잔고 보고 중 오류 발생: {e}")
-
-def report_balance():
-    try:
-        # 잔고 정보를 가져옵니다.
-        krw_balance = upbit.get_balance("KRW")
-        btc_balance = upbit.get_balance("BTC")
-        btc_avg_buy_price = upbit.get_avg_buy_price("BTC")
-        current_btc_price = pyupbit.get_current_price("KRW-BTC")
-        
-        # 비트코인 평가금액 및 총 보유 자산 계산
-        btc_valuation = btc_balance * current_btc_price
-        total_assets = krw_balance + btc_valuation
-        
-        # 평가손익 및 수익률 계산
-        valuation_profit_loss = btc_valuation - (btc_avg_buy_price * btc_balance)
-        if btc_avg_buy_price > 0:
-            return_rate = (valuation_profit_loss / (btc_avg_buy_price * btc_balance)) * 100
-        else:
-            return_rate = 0
-        
-        formatted_message = f"```\n원화 보유 자산 : {krw_balance:,.0f} KRW\n코인 보유 자산 : {btc_balance:.5f} BTC\n\n"
-        formatted_message += f"코인 매수 평균가 : {btc_avg_buy_price:,.0f} KRW\n코인 평가금액 : {btc_valuation:,.0f} KRW\n\n"
-        formatted_message += f"평가손익 : {valuation_profit_loss:,.0f} KRW\n수익률 : {return_rate:.2f}%\n\n"
-        formatted_message += f"총 보유 자산 : {total_assets:,.0f} KRW\n```"
-        
-        print(formatted_message)
-    except Exception as e:
-        print(f"잔고 보고 중 오류 발생: {e}")
-
-
-def update_trade_status():
-    global pre_trade_status, post_trade_status
-    # 거래 전 상태 업데이트
-    pre_trade_status = {
-        "krw_balance": upbit.get_balance("KRW"),
-        "btc_balance": upbit.get_balance("BTC"),
-        "avg_buy_price": upbit.get_avg_buy_price("BTC"),
-        "btc_valuation": upbit.get_balance("BTC") * pyupbit.get_current_price("KRW-BTC"),
-    }
-
-def format_value_change(pre_value, post_value, format_str="{:,.0f}", suffix=""):
-    if pre_value == post_value:
-        return f"{format_str.format(pre_value)}{suffix} -> 변동 없음"
-    else:
-        change = post_value - pre_value
-        percentage_change = (change / pre_value) * 100 if pre_value else 0
-        arrow = ":arrow_up_small:" if change > 0 else ":arrow_down_small:"
-        return f"{format_str.format(pre_value)}{suffix} -> {format_str.format(post_value)}{suffix} ({arrow} {abs(percentage_change):.2f}%)"
-
-def compare_trade_status():
-    global post_trade_status
-
-    # 잔고 정보를 가져옵니다.
-    krw_balance = upbit.get_balance("KRW")
-    btc_balance = upbit.get_balance("BTC")
-    btc_avg_buy_price = upbit.get_avg_buy_price("BTC")
-    current_btc_price = pyupbit.get_current_price("KRW-BTC")
-
-    # 거래 후 상태 업데이트
-    post_trade_status = {
-        "krw_balance": krw_balance,
-        "btc_balance": btc_balance,
-        "avg_buy_price": btc_avg_buy_price,
-        "btc_valuation": upbit.get_balance("BTC") * current_btc_price,
-    }
-    
-    # 평가손익과 수익률 계산
-    # 비트코인 평가금액 및 총 보유 자산 계산
-    btc_valuation = btc_balance * current_btc_price
-    total_assets = krw_balance + btc_valuation
-
-    # 평가손익 및 수익률 계산
-    valuation_profit_loss = btc_valuation - (btc_avg_buy_price * btc_balance)
-    if btc_avg_buy_price > 0:
-        return_rate = (valuation_profit_loss / (btc_avg_buy_price * btc_balance)) * 100
-    else:
-        return_rate = 0
-
-
-    # 메시지 생성
-    message = "```\n원화 보유 자산 : " + format_value_change(pre_trade_status["krw_balance"], post_trade_status["krw_balance"], "{:,.0f}", " KRW")
-    message += "\n코인 보유 자산 : " + format_value_change(pre_trade_status["btc_balance"], post_trade_status["btc_balance"], "{:.5f}", " BTC")
-    message += "\n코인 매수 평균가 : " + format_value_change(pre_trade_status["avg_buy_price"], post_trade_status["avg_buy_price"], "{:,.0f}", " KRW")
-    message += "\n코인 평가금액 : " + format_value_change(pre_trade_status["btc_valuation"], post_trade_status["btc_valuation"], "{:,.0f}", " KRW")
-    message += f"\n평가손익 : {valuation_profit_loss:,.0f} KRW\n수익률 : {return_rate:.2f}%\n\n"
-    message += f"총 보유 자산 : {total_assets:,.0f} KRW\n```"
-
-    print_and_slack_message(message)
-
-
 def get_current_status():
+    global pre_trade_status
+
     orderbook = pyupbit.get_orderbook(ticker="KRW-BTC")
     current_time = orderbook['timestamp']
     btc_balance = 0
     krw_balance = 0
     btc_avg_buy_price = 0
+    current_btc_price = pyupbit.get_current_price("KRW-BTC")
     balances = upbit.get_balances()
-
 
     for b in balances:
         if b['currency'] == "BTC":
-            btc_balance = b['balance']
-            btc_avg_buy_price = b['avg_buy_price']
+            btc_balance = float(b['balance'])
+            btc_avg_buy_price = float(b['avg_buy_price'])
         if b['currency'] == "KRW":
-            krw_balance = b['balance']
+            krw_balance = float(b['balance'])
+
+    # gpt 결정 전 상태 저장 (맨 처음에만)
+    if(pre_trade_status == {}):
+         pre_trade_status = {
+            "krw_balance": krw_balance,
+            "btc_balance": btc_balance,
+            "avg_buy_price": btc_avg_buy_price,
+            "btc_valuation": btc_balance * current_btc_price,
+            "total_assets": krw_balance + (btc_balance * btc_avg_buy_price),
+        }
 
     current_status = {
         "current_time": current_time,
@@ -181,6 +69,8 @@ def get_current_status():
         "krw_balance": krw_balance,
         "btc_avg_buy_price": btc_avg_buy_price,
     }
+
+
     return json.dumps(current_status)
 
 
@@ -193,8 +83,17 @@ def fetch_and_prepare_data():
     # Define a helper function to add indicators
     def add_indicators(df):
         # Moving Averages
+        # Calculate and add SMAs for 3, 5, 10, and 20-day periods
+        df['SMA_3'] = ta.sma(df['close'], length=3)
+        df['SMA_5'] = ta.sma(df['close'], length=5)
         df['SMA_10'] = ta.sma(df['close'], length=10)
+        df['SMA_20'] = ta.sma(df['close'], length=20)
+
+        # Calculate and add EMAs for 3, 5, 10, and 20-day periods
+        df['EMA_3'] = ta.ema(df['close'], length=3)
+        df['EMA_5'] = ta.ema(df['close'], length=5)
         df['EMA_10'] = ta.ema(df['close'], length=10)
+        df['EMA_20'] = ta.ema(df['close'], length=20)
 
         # RSI
         df['RSI_14'] = ta.rsi(df['close'], length=14)
@@ -230,6 +129,8 @@ def fetch_and_prepare_data():
 
     # make combined data as string and print length
     print(len(combined_data))
+    # pretty_json = json.dumps(json.loads(combined_data), indent=4)
+    # print(pretty_json)
 
     return json.dumps(combined_data)
 
@@ -240,9 +141,9 @@ def get_instructions(file_path):
             instructions = file.read()
         return instructions
     except FileNotFoundError:
-        print_and_slack_message(f"File not found : {file_path}")
+        print(f"File not found : {file_path}")
     except Exception as e:
-        print_and_slack_message(
+        print(
             f":bug: `An error occurred while reading the file {file_path}`:\n```{e}```"
         )
 
@@ -252,7 +153,7 @@ def analyze_data_with_gpt4(data_json):
     try:
         instructions = get_instructions(instructions_path)
         if not instructions:
-            print_and_slack_message(f"{instructions_path}을 찾을 수 없습니다.")
+            print(f"{instructions_path}을 찾을 수 없습니다.")
             return None
 
         current_status = get_current_status()
@@ -267,74 +168,134 @@ def analyze_data_with_gpt4(data_json):
         )
         return response.choices[0].message.content
     except Exception as e:
-        print_and_slack_message(f":bug: `gpt 분석 중 예상치 못한 오류가 발생했습니다:`\n```{e}```")
+        print(f":bug: `gpt 분석 중 예상치 못한 오류가 발생했습니다:`\n```{e}```")
         print(traceback.format_exc())
         return None
 
-
-def execute_buy():
-    print("Attempting to buy BTC...")
+def execute_buy(percentage=1.00):  # 보유 원화 기준
+    print(f"보유 원화의 {percentage * 100}% 만큼 매수를 시도합니다...")
     try:
         krw = upbit.get_balance("KRW")
-        if krw > 5000:
-            result = upbit.buy_market_order("KRW-BTC", krw*0.9995)
+        amount_to_buy = krw * percentage
+        if amount_to_buy > MIN_TRADE_AMOUNT:
+            result = upbit.buy_market_order("KRW-BTC", amount_to_buy * (1 - FEE_RATE))
+            if result is None or 'error' in result:  # 매수 주문 실패를 확인
+                raise Exception(f"매수 주문 실패: 반환 결과 없음 또는 오류 발생\n{result}")
             print(f"**Buy order successful**\n```{result}```")
+        else: 
+            raise Exception(f"매수 최소 금액 미달: 필요 : {MIN_TRADE_AMOUNT}, 매수 금액 : {amount_to_buy}")
     except Exception as e:
-        print_and_slack_message(f"**:bug: `Failed to execute buy order**`\n```{e}```")
+        print(f"**:bug: 매수 주문 실패**\n```{e}```")
 
-
-def execute_sell():
-    print("Attempting to sell BTC...")
+def execute_sell(percentage=1.00):   # 보유 BTC 기준
+    print('percentage', percentage)
+    print(f"보유 BTC의 {percentage * 100}% 만큼 매도를 시도합니다...")
     try:
         btc = upbit.get_balance("BTC")
-        current_price = pyupbit.get_orderbook(ticker="KRW-BTC")['orderbook_units'][0]["ask_price"]
-        if current_price*btc > 5000:
-            result = upbit.sell_market_order("KRW-BTC", btc)
+        current_price = pyupbit.get_current_price("KRW-BTC")
+        
+        # 보유량과 계산된 매도량 중 더 작은 값을 매도량으로 설정
+        amount_to_sell = min(btc, btc * percentage)
+
+        if amount_to_sell * current_price > MIN_TRADE_AMOUNT:
+            result = upbit.sell_market_order("KRW-BTC", amount_to_sell)
+            if result is None:
+                raise Exception("매도 주문 실패: 반환 결과 없음")
             print(f"**Sell order successful**\n```{result}```")
+        else:
+            raise Exception(f"매도 최소 금액 미달: 필요 : {MIN_TRADE_AMOUNT}, 현재 : {amount_to_sell * current_price}")
     except Exception as e:
-        print(f"Failed to execute sell order: {e}")
-        print_and_slack_message(f"**:bug: Failed to execute sell order**\n```{e}```")
+        print(f"**:bug: 매도 주문 실패**\n```{e}```")
 
 
 def make_decision_and_execute():
     print("결정을 내리고 실행 중...")
     data_json = fetch_and_prepare_data()
+    
+    
+    def json_to_excel(data, file_path='market_data.xlsx'):
+        # 데이터 타입에 따라 적절히 처리
+        if isinstance(data, str):  # data가 문자열인 경우, JSON으로 변환
+            data_dict = json.loads(json.loads(data))
+        else:  # data가 이미 딕셔너리인 경우, 변환 없이 사용
+            data_dict = data
+            
+        data_df = pd.DataFrame(data_dict['data'], columns=data_dict['columns'])
+        
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        # DataFrame을 엑셀 파일로 저장
+        data_df.to_excel(file_path, index=False)
+        print(f"Data saved to {file_path}")
+    
+    json_to_excel(data_json)
+    
+    # print("그냥 data_json : ")
+    # print(data_json)
+    # print('\n\n\n\n')
+
+
+    # data_json = combined_df.to_json(orient='split')
+    # data_obj = json.loads(data_json)
+    # pretty_json = json.dumps(data_obj, indent=4)
+    # print(pretty_json)
+
     # advice = analyze_data_with_gpt4(data_json)
+  
+    advice = {
+            "decision": "buy",
+            "percentage": 0.50,
+            "reason": "주식이 좋아요"
+            }
+    advice = json.dumps(advice)
+    
 
     try:
-        # decision = json.loads(advice)
-        # decision_text = decision.get('decision')
-        # reason_text = decision.get('reason')
-        # translated_reason = translate_to_korean(reason_text)
-        decision_text = random.choice(["buy", "sell", "hold"])
-        translated_reason = random.choice(["코인이 좋습니다.", "코인이 안좋습니다.", "모르겠습니다."])
+        decisions = json.loads(advice)
+        decision   = decisions.get('decision')
+        reason     = decisions.get('reason')
+        percentage = float(decisions.get('percentage'))
+
+        # translated_reason = translate_to_korean(reason)
+        translated_reason = reason  # 영어 번역 안함
+
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # 거래 전 상태 업데이트 호출 예
-        update_trade_status()
+        suff_message = ""
+        if decision == "buy":
+            # execute_buy(percentage)
+            suff_message = f"- :moneybag: {int(percentage * 100)}% 매수! :moneybag:"
 
-        message_text = ""
-        if decision_text == "buy":
-            # execute_buy()
-            message_text = "**코인을 매수합니다.** :moneybag:"
-        elif decision_text == "sell":
-            # execute_sell()
-            message_text = "**코인을 매도합니다.** :money_with_wings:"
-        elif decision_text == "hold":
-            message_text = "**코인을 보유합니다.** :eyes:"
+        elif decision == "sell":
+            # execute_sell(percentage)
+            suff_message = f"- :money_with_wings: {int(percentage * 100)}% 매도! :money_with_wings:"
+
+        elif decision == "hold":
+            suff_message = "- :eyes: 보유합니다 :eyes:"
+
         else:
-            message_text = "**결정을 내릴 수 없습니다.** :thinking_face:"
+            suff_message = "- :thinking_face: 결정을 내릴 수 없습니다 :thinking_face:"
 
 
-        detailed_message = f"[{current_time}]\n{message_text}\n- 이유:\n{translated_reason}"
+        detailed_message = f"[{current_time}]\n{suff_message}\n- 이유:\n{translated_reason}"
         print(detailed_message)
 
-        # 거래 후 상태 비교 및 메시지 생성 호출 예
-        compare_trade_status()
-        
+        # gpt 결정 후 상태 비교 및 메시지 전송
+        # compare_trade_status()
+
     except Exception as e:
         print(f"Failed to parse the advice as JSON: {e}")
 
+
+def schedule_tasks(hour_interval):
+    for hour in range(0, 24, hour_interval):
+        schedule_time = "{:02d}:01".format(hour)    # 01 분마다
+        schedule.every().day.at(schedule_time).do(make_decision_and_execute)
+
+#########################################################################################################
+############# 기타 함수들 ############# 
+#########################################################################################################
 
 def translate_to_korean(text):
     try:
@@ -354,16 +315,128 @@ def translate_to_korean(text):
     except Exception as e:
         print(f"번역 중 예기치 않은 오류 발생: {e}")
         return translated_text  # 기타 예외 처리
+    
+
+def format_value_change(pre_value, post_value, format_str="{:,.0f}", suffix=""):   # 천 단위 구분자(,), 소수점 X
+    if pre_value == post_value:
+        return f"{format_str.format(pre_value)}{suffix} -> 변동 없음"
+    else:
+        change = post_value - pre_value
+        percentage_change = (change / pre_value) * 100 if pre_value else 0
+        return f"{format_str.format(pre_value)}{suffix} -> {format_str.format(post_value)}{suffix} ({percentage_change:.2f}%)"  # 소수점 아래 두 자리
+
+def compare_trade_status():
+    global pre_trade_status
+    global post_trade_status
+
+    # 잔고 정보를 가져옵니다.
+    krw_balance = upbit.get_balance("KRW")
+    btc_balance = upbit.get_balance("BTC")
+    btc_avg_buy_price = upbit.get_avg_buy_price("BTC")
+    current_btc_price = pyupbit.get_current_price("KRW-BTC")
+
+    # 비트코인 평가금액
+    btc_valuation = btc_balance * current_btc_price # 비트코인 평가금액
+
+    # 거래 후 상태 업데이트
+    post_trade_status = {
+        "krw_balance": krw_balance,
+        "btc_balance": btc_balance,
+        "avg_buy_price": btc_avg_buy_price,
+        "btc_valuation": btc_valuation,
+    }
+    
+    # 거래 후 총 자산 상태 업데이트
+    post_trade_status["total_assets"] = krw_balance + btc_valuation  # 총 보유 자산
 
 
+    # 평가손익 및 수익률 계산
+    valuation_profit_loss = btc_valuation - (btc_avg_buy_price * btc_balance)   # 평가손익
+    if btc_avg_buy_price > 0:
+        return_rate = (valuation_profit_loss / (btc_avg_buy_price * btc_balance)) * 100  # 수익률
+    else:
+        return_rate = 0
+
+    message = "```\n원화 보유 자산 : " + format_value_change(pre_trade_status["krw_balance"], post_trade_status["krw_balance"], "{:,.0f}", " KRW") # 천 단위 구분자(,), 소수점 X
+    message += "\n코인 보유 자산 : " + format_value_change(pre_trade_status["btc_balance"], post_trade_status["btc_balance"], "{:.5f}", " BTC") # 소수점 5자리까지
+    message += "\n코인 매수 평균가 : " + format_value_change(pre_trade_status["avg_buy_price"], post_trade_status["avg_buy_price"], "{:,.0f}", " KRW")
+    message += "\n코인 평가금액 : " + format_value_change(pre_trade_status["btc_valuation"], post_trade_status["btc_valuation"], "{:,.0f}", " KRW")
+    message += f"\n\n평가손익 : {valuation_profit_loss:,.0f} KRW\n수익률 : {return_rate:.2f}%\n\n"
+    message += "총 보유 자산 : " + format_value_change(pre_trade_status["total_assets"], post_trade_status["total_assets"], "{:,.0f}", " KRW") + "\n```"
+
+    pre_trade_status = post_trade_status.copy()  # 현재 상태를 과거 상태로 덮어씌우기
+
+    print(message)
+
+
+############ 메인 함수 ############
 if __name__ == "__main__":
     make_decision_and_execute()
-    # schedule.every().hour.at(":01").do(make_decision_and_execute)
-    schedule.every().day.at("00:01").do(make_decision_and_execute)
-    schedule.every().day.at("06:01").do(make_decision_and_execute)
-    schedule.every().day.at("12:01").do(make_decision_and_execute)
-    schedule.every().day.at("18:01").do(make_decision_and_execute)
+    schedule_tasks(HOUR_INTERVAL)
 
     while True:
         schedule.run_pending()
         time.sleep(1)
+
+
+
+
+
+
+
+
+""" 나중에 호출할 잔고 보고 메서드들
+
+def report_balance():
+    try:
+        # 잔고 정보를 가져옵니다.
+        krw_balance = upbit.get_balance("KRW")
+        btc_balance = upbit.get_balance("BTC")
+        btc_avg_buy_price = upbit.get_avg_buy_price("BTC")
+        current_btc_price = pyupbit.get_current_price("KRW-BTC")
+        
+        # 비트코인 평가금액 및 총 보유 자산 계산
+        btc_valuation = btc_balance * current_btc_price
+        total_assets = krw_balance + btc_valuation
+        
+        # 평가손익 및 수익률 계산
+        valuation_profit_loss = btc_valuation - (btc_avg_buy_price * btc_balance)
+        if btc_avg_buy_price > 0:
+            return_rate = (valuation_profit_loss / (btc_avg_buy_price * btc_balance)) * 100
+        else:
+            return_rate = 0
+        
+        formatted_message = f"```\n원화 보유 자산 : {krw_balance:,.0f} KRW\n코인 보유 자산 : {btc_balance:.5f} BTC\n\n"
+        formatted_message += f"코인 매수 평균가 : {btc_avg_buy_price:,.0f} KRW\n코인 평가금액 : {btc_valuation:,.0f} KRW\n\n"
+        formatted_message += f"평가손익 : {valuation_profit_loss:,.0f} KRW\n수익률 : {return_rate:.2f}%\n\n"
+        formatted_message += f"총 보유 자산 : {total_assets:,.0f} KRW\n```"
+        
+        print(formatted_message)
+    except Exception as e:
+        print(f"잔고 보고 중 오류 발생: {e}")
+
+
+# 한화로 환산한 총 보유 자산 (KRW, BTC 포함)
+def calculate_total_assets(json_data):
+    total_assets = 0
+    for entry in json_data:
+        if entry["currency"] == "KRW":
+            total_assets += float(entry["balance"])
+        if entry["currency"] == "BTC":
+            total_assets += float(entry["balance"]) * pyupbit.get_current_price(
+                "KRW-BTC"
+            )
+    return total_assets
+
+
+def format_json_to_slack(json_data):
+    formatted_message = "```"
+    for entry in json_data:
+        formatted_message += f"\nCurrency: {entry['currency']}\nBalance: {entry['balance']}\nLocked: {entry['locked']}\nAvg Buy Price: {entry['avg_buy_price']}\nAvg Buy Price Modified: {entry['avg_buy_price_modified']}\nUnit Currency: {entry['unit_currency']}\n"
+
+    formatted_message += "\n총 보유자산: "
+    formatted_message += "{:,.2f}".format(calculate_total_assets(json_data))
+    formatted_message += "KRW\n```"
+    return formatted_message
+
+"""
