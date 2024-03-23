@@ -127,7 +127,7 @@ def fetch_and_prepare_data():
     # make combined data as string and print length
     print(len(combined_data))
 
-    return json.dumps(combined_data)
+    return combined_data
 
 
 def get_instructions(file_path):
