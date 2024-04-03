@@ -2,8 +2,27 @@
 - GPT API를 활용하여 투자를 자동화 합니다. by 유튜버 조코딩
 ## 관련 링크
 - [수업 자료](https://jocoding.net/bitcoin)
-- [라이브 풀버전 링크(멤버십 전용)](https://youtube.com/live/-7IVgjUw79s?feature=share)
+- [1편 - 라이브 풀버전 링크(멤버십 전용)](https://youtube.com/live/-7IVgjUw79s?feature=share)
+- [2편 - 라이브 풀버전 링크(멤버십 전용)](https://youtube.com/live/GhZenus5rww?feature=share)
 - 편집본 (업데이트 예정)
+
+## 전략 소개
+### 1.autotrade.py, instruction.md
+- 데이터: 일(30일), 시간(24시간) OHLCV, Moving Averages, RSI, Stochastic Oscillator, MACD, Bollinger Bands, Orderbook Data
+- 전략: 1시간에 한번 판단하여 전량 매수/매도 or 홀드
+
+### 2.autotrade_v2.py, instruction_v2.md
+- 데이터: 일(30일), 시간(24시간) OHLCV, Moving Averages, RSI, Stochastic Oscillator, MACD, Bollinger Bands, Orderbook Data, 최신 뉴스 데이터(SerpApi), 공포/탐욕 지수
+- 전략:  8시간에 한번 판단하여 부분 매수/매도 or 홀드, 투자 데이터 기록하고 AI 재귀 개선
+- 뉴스 데이터 조회를 위한 [SerpApi](https://serpapi.com/) 가입 및 API KEY 등록 필요
+
+## .env 파일 생성 및 설정
+```
+OPENAI_API_KEY="YourKey"
+UPBIT_ACCESS_KEY="YourKey"
+UPBIT_SECRET_KEY="YourKey"
+SERPAPI_API_KEY="YourKey"
+```
 
 ## 로컬 환경 설정
 ```
@@ -35,10 +54,6 @@ sudo apt install python3-pip
 ```
 git clone https://github.com/youtube-jocoding/gpt-bitcoin.git
 ```
-### 레포지토리 업데이트(풀) (원래 레포지토리 디렉토리 안에서 실행)
-```
-git pull origin main
-```
 ### 서버에서 라이브러리 설치
 ```
 pip3 install -r requirements.txt
@@ -61,8 +76,7 @@ cd 경로
 vim autotrade.py
 ```
 - vim 에디터 입력: i
-- vim 에디터 저장: ESC + :wq!
-- vim 에디터 저장 안하고 나가기 : ESC + :q!
+- vim 에디터 저장: ESC + wq!
 ### 실행하기
 - 그냥 실행
 ```

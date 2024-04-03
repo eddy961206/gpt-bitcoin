@@ -1,3 +1,9 @@
 .env
 venv
 __pycache__
+*.xlsx
+.vscode/settings.json
+volatility_breakout/log_data
+volatility_breakout/data/apiKey.py
+volatility_breakout/data/coin_option.py
+*.sqlite
