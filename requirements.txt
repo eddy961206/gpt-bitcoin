@@ -8,3 +8,4 @@ pandas
 pandas_ta
 schedule
 datetime
+streamlit

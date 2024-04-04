@@ -44,7 +44,8 @@ def initialize_db(db_path='trading_decisions.sqlite'):
                 reason TEXT,
                 btc_balance REAL,
                 krw_balance REAL,
-                btc_avg_buy_price REAL
+                btc_avg_buy_price REAL,
+                btc_krw_price REAL
             );
         ''')
         conn.commit()
@@ -56,7 +57,8 @@ def save_decision_to_db(decisions, current_status, translated_reason):
     
         # Parsing current_status from JSON to Python dict
         status_dict = json.loads(current_status)
-        
+        current_price = pyupbit.get_orderbook(ticker="KRW-BTC")['orderbook_units'][0]["ask_price"]
+
         # Preparing data for insertion
         data_to_insert = (
             decisions.get('decision'),
@@ -64,13 +66,14 @@ def save_decision_to_db(decisions, current_status, translated_reason):
             translated_reason,
             status_dict.get('btc_balance'),
             status_dict.get('krw_balance'),
-            status_dict.get('btc_avg_buy_price')
+            status_dict.get('btc_avg_buy_price'),
+            current_price
         )
         
         # Inserting data into the database
         cursor.execute('''
-            INSERT INTO decisions (timestamp, decision, percentage, reason, btc_balance, krw_balance, btc_avg_buy_price)
-            VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?)
+            INSERT INTO decisions (timestamp, decision, percentage, reason, btc_balance, krw_balance, btc_avg_buy_price, btc_krw_price)
+            VALUES (datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?, ?)
         ''', data_to_insert)
     
         conn.commit()
