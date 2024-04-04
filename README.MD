@@ -87,6 +87,9 @@ python3 autotrade.py
 ```
 nohup python3 -u autotrade.py > output.log 2>&1 &
 ```
+```
+nohup streamlit run streamlit_app.py &
+```
 - 로그 보기
 ```
 cat output.log
@@ -103,5 +106,11 @@ ps ax | grep .py
 kill -9 PID
 ex. kill -9 13586
 ```
+- 파일 삭제
+```
+rm -rf trading_decisions.sqlite
+```
+
+
 ## 추후 계획
 - 빗썸, 바이낸스, 코인베이스, OKX, 바이비트도 가능하면 다루겠음
