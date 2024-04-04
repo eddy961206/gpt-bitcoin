@@ -109,41 +109,48 @@ def fetch_last_decisions(db_path='trading_decisions.sqlite', num_decisions=10):
 def get_current_status():
     global pre_trade_status
 
-    orderbook = pyupbit.get_orderbook(ticker="KRW-BTC")
-    current_time = orderbook['timestamp']
-    btc_balance = 0
-    krw_balance = 0
-    btc_avg_buy_price = 0
-    current_btc_price = pyupbit.get_current_price("KRW-BTC")
-    balances = upbit.get_balances()
+    try:
+        # 업비트의 주문장부 정보
+        orderbook = pyupbit.get_orderbook(ticker="KRW-BTC")
+        current_time = orderbook['timestamp']
+        btc_balance = 0
+        krw_balance = 0
+        btc_avg_buy_price = 0
+        
+        # 현재 비트코인의 가격 조회
+        current_btc_price = pyupbit.get_current_price("KRW-BTC")
+        balances = upbit.get_balances()
 
-    for b in balances:
-        if b['currency'] == "BTC":
-            btc_balance = float(b['balance'])
-            btc_avg_buy_price = float(b['avg_buy_price'])
-        if b['currency'] == "KRW":
-            krw_balance = float(b['balance'])
+        for b in balances:
+            if b['currency'] == "BTC":
+                btc_balance = float(b['balance'])
+                btc_avg_buy_price = float(b['avg_buy_price'])
+            if b['currency'] == "KRW":
+                krw_balance = float(b['balance'])
 
-    # gpt 결정 전 상태 저장 (맨 처음에만)
-    if(pre_trade_status == {}):
-         pre_trade_status = {
-            "krw_balance": krw_balance,
+        # gpt 결정 전 상태 저장 (맨 처음 실행할 때만)
+        if pre_trade_status == {}:
+            pre_trade_status = {
+                "krw_balance": krw_balance,
+                "btc_balance": btc_balance,
+                "avg_buy_price": btc_avg_buy_price,
+                "btc_valuation": btc_balance * current_btc_price,  # 비트코인 평가 금액
+                "total_assets": krw_balance + (btc_balance * btc_avg_buy_price),  # 총 자산
+            }
+
+        current_status = {
+            "current_time": current_time,
+            "orderbook": orderbook,
             "btc_balance": btc_balance,
-            "avg_buy_price": btc_avg_buy_price,
-            "btc_valuation": btc_balance * current_btc_price,
-            "total_assets": krw_balance + (btc_balance * btc_avg_buy_price),
+            "krw_balance": krw_balance,
+            "btc_avg_buy_price": btc_avg_buy_price,
         }
 
-    current_status = {
-        "current_time": current_time,
-        "orderbook": orderbook,
-        "btc_balance": btc_balance,
-        "krw_balance": krw_balance,
-        "btc_avg_buy_price": btc_avg_buy_price,
-    }
+        return json.dumps(current_status)
+    except Exception as e:
+        print_and_slack_message(f"현재 상태를 가져오는 중 오류가 발생했습니다: {e}")
+        return json.dumps({"error": "현재 상태를 가져오는 중 오류가 발생했습니다."})
 
-
-    return json.dumps(current_status)
 
 
 def fetch_and_prepare_data():
@@ -231,31 +238,45 @@ def get_news_data():
                     simplified_news.append((news_item['title'], news_item.get('source', {}).get('name', 'Unknown source'), 'No timestamp provided'))
         result = str(simplified_news)
     except Exception as e:
-        print(f"Error fetching news data: {e}")
+        print_and_slack_message(f"Error fetching news data: {e}")
 
     return result
 
 def fetch_fear_and_greed_index(limit=1, date_format=''):
-    """
-    최신의 Fear and Greed Index 데이터를 가져오는 함수입니다.
-    매개변수:
-    - limit (int): 반환할 결과의 개수입니다. 기본값은 1입니다.
-    - date_format (str): 날짜 형식입니다. 가능한 값은 'us' (미국), 'cn' (중국), 'kr' (한국), 'world' (세계)입니다. 기본값은 '' (Unix 시간)입니다.
-    반환값:
-    - dict 또는 str: 지정된 형식의 Fear and Greed Index 데이터입니다.
-    """
-    base_url = "https://api.alternative.me/fng/"
-    params = {
-        'limit': limit,
-        'format': 'json',
-        'date_format': date_format
-    }
-    response = requests.get(base_url, params=params)
-    myData = response.json()['data']
-    resStr = ""
-    for data in myData:
-        resStr += str(data)
-    return resStr
+   """
+   최신의 Fear and Greed Index 데이터를 가져오는 함수입니다.
+
+   매개변수:
+   - limit (int): 반환할 결과의 개수입니다. 기본값은 1입니다.
+   - date_format (str): 날짜 형식입니다. 가능한 값은 'us' (미국), 'cn' (중국), 'kr' (한국), 'world' (세계)입니다. 기본값은 '' (Unix 시간)입니다.
+
+   반환값:
+   - dict 또는 str: 지정된 형식의 Fear and Greed Index 데이터입니다. 실패 시 오류 메시지를 반환합니다.
+   """
+   try:
+       base_url = "https://api.alternative.me/fng/"
+       params = {
+           'limit': limit,
+           'format': 'json',
+           'date_format': date_format
+       }
+       response = requests.get(base_url, params=params)
+       response.raise_for_status() # 네트워크 오류나 HTTP 응답 상태 코드가 4xx, 5xx인 경우 예외를 발생시킵니다.
+       myData = response.json().get('data', [])
+       if not myData: # 데이터가 비어있는 경우
+           return "Fear and Greed Index API에서 데이터를 반환하지 않았습니다."
+
+       resStr = ""
+       for data in myData:
+           resStr += str(data)
+       return resStr
+
+   except requests.RequestException as e:
+       print_and_slack_message(f"Fear and Greed Index를 가져오는 동안 네트워크 관련 오류가 발생했습니다: {e}") 
+   except KeyError as e:
+       print_and_slack_message(f"Fear and Greed Index 응답에서 예상한 데이터 구조를 찾을 수 없습니다: {e}")
+   except Exception as e:
+       print_and_slack_message(f"Fear and Greed Index를 가져오는 동안 예기치 않은 오류가 발생했습니다: {e}")
 
 def get_instructions(file_path):
     try:
@@ -289,6 +310,7 @@ def analyze_data_with_gpt4(news_data, data_json, last_decisions, fear_and_greed,
             response_format={"type":"json_object"}
         )
         advice = response.choices[0].message.content
+        print(f"GPT4 분석됨..")
         return advice
     except Exception as e:
         print_and_slack_message(f":bug: `gpt 분석 중 예상치 못한 오류가 발생했습니다:`\n```{e}```")
@@ -475,7 +497,7 @@ def compare_trade_status():
 ############ 메인 함수 ############
 if __name__ == "__main__":
     initialize_db()
-    # make_decision_and_execute()
+    make_decision_and_execute()
     
     schedule_tasks(HOUR_INTERVAL)
 
